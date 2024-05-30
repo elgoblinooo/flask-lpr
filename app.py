@@ -3,6 +3,9 @@ import logging
 import redis
 import json
 from loguru import logger
+import requests
+from datetime import datetime
+import uuid
 
 app = Flask(__name__)
 logger.add("app.log", rotation="500 MB", level="INFO")
@@ -43,6 +46,7 @@ def process_lpr():
         plate_num = request.form.get('plate_num')
         car_logo = request.form.get('car_logo')
         confidence_str = request.form.get('confidence')
+        cam_ip = request.form.get('cam_ip')  # Receive cam_ip from form POST
 
         # Validate plate number
         if not is_valid_plate_num(plate_num):
@@ -59,17 +63,44 @@ def process_lpr():
         logger.info(f"Received license plate number: {sanitize_input(plate_num)}")
         logger.info(f"Detected car logo: {sanitize_input(car_logo)}")
         logger.info(f"Confidence level: {confidence}")
+        logger.info(f"Camera IP: {sanitize_input(cam_ip)}")
 
         # Prepare data for Redis in a secure and efficient way
         lpr_data = {
             'plate_num': sanitize_input(plate_num),
             'car_logo': sanitize_input(car_logo),
-            'confidence': confidence
+            'confidence': confidence,
+            'cam_ip': sanitize_input(cam_ip)  # Include cam_ip in the data
         }
         lpr_data_str = json.dumps(lpr_data)
 
         # Publish data to Redis channel
         redis_client.publish('lpr_data', lpr_data_str)
+
+        # Prepare data for external endpoint
+        external_data = {
+            "eventTimestamp": datetime.utcnow().isoformat() + "Z",
+            "cameraIp": cam_ip,  # Use the received cam_ip
+            "vehiclePlateNumber": plate_num,
+            "imageUrl": f"snapshot/dummy_{plate_num}_{datetime.now().strftime('%Y%m%d')}.jpg",
+            "systemName": "DAHUA",
+            "vehicleType": "CAR",
+            "vehicleBrand": "dummy",
+            "vehicleColor": "Black",
+            "vehiclePlateColor": "Black",
+            "confidence": confidence,
+            "executionTime": 100,
+            "coordinates": "0,0,0,0",
+            "vehicleModel": "dummy",
+            "engineLprExternalId": str(uuid.uuid4()),
+            "oldEngineLprExternalId": None
+        }
+
+        # Send data to external endpoint
+        external_endpoint = "http://110.0.100.80:8888/engine-lpr/v1/trigger/lpr/local/async"
+        response = requests.post(external_endpoint, json=external_data, headers={"Content-Type": "application/json"})
+        if response.status_code != 200:
+            raise ValueError(f"Failed to send data to external endpoint: {response.text}")
 
         return jsonify({'status': 'success'}), 200
 
