@@ -46,7 +46,9 @@ def process_lpr():
         plate_num = request.form.get('plate_num')
         car_logo = request.form.get('car_logo')
         confidence_str = request.form.get('confidence')
-        cam_ip = request.form.get('cam_ip')  # Receive cam_ip from form POST
+        cam_ip = request.form.get('cam_ip')
+        vehicle_brand = request.form.get('car_logo')
+        vehicle_color = request.form.get('car_color')
 
         # Validate plate number
         if not is_valid_plate_num(plate_num):
@@ -64,13 +66,17 @@ def process_lpr():
         logger.info(f"Detected car logo: {sanitize_input(car_logo)}")
         logger.info(f"Confidence level: {confidence}")
         logger.info(f"Camera IP: {sanitize_input(cam_ip)}")
+        logger.info(f"Vehicle Brand: {sanitize_input(vehicle_brand)}")
+        logger.info(f"Vehicle Color: {sanitize_input(vehicle_color)}")
 
         # Prepare data for Redis in a secure and efficient way
         lpr_data = {
             'plate_num': sanitize_input(plate_num),
             'car_logo': sanitize_input(car_logo),
             'confidence': confidence,
-            'cam_ip': sanitize_input(cam_ip)  # Include cam_ip in the data
+            'cam_ip': sanitize_input(cam_ip),
+            'vehicle_brand': sanitize_input(vehicle_brand),
+            'vehicle_color': sanitize_input(vehicle_color)
         }
         lpr_data_str = json.dumps(lpr_data)
 
@@ -80,13 +86,13 @@ def process_lpr():
         # Prepare data for external endpoint
         external_data = {
             "eventTimestamp": datetime.utcnow().isoformat() + "Z",
-            "cameraIp": cam_ip,  # Use the received cam_ip
+            "cameraIp": cam_ip,
             "vehiclePlateNumber": plate_num,
             "imageUrl": f"snapshot/dummy_{plate_num}_{datetime.now().strftime('%Y%m%d')}.jpg",
             "systemName": "DAHUA",
             "vehicleType": "CAR",
-            "vehicleBrand": "dummy",
-            "vehicleColor": "Black",
+            "vehicleBrand": vehicle_brand,
+            "vehicleColor": vehicle_color,
             "vehiclePlateColor": "Black",
             "confidence": confidence,
             "executionTime": 100,
